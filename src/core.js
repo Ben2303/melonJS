@@ -554,6 +554,20 @@
 	String.prototype.contains = function(word) {
 		return this.indexOf(word) > -1;
 	};
+	
+   /**
+	 * convert the string to hex value
+	 * @extends String
+	 * @return {String} 
+	 */
+	String.prototype.toHex = function() {
+      var res = "", c = 0;
+      while(c<this.length){
+         res += this.charCodeAt(c++).toString(16);
+      }
+      return res;
+	};
+
 
 	/**
 	 * add a clamp fn to the Number object
@@ -590,8 +604,8 @@
 	 */
 	Number.prototype.round = function() {
 		// if only one argument use the object value
-		num = (arguments.length == 1) ? this : arguments[0];
-		powres = Math.pow(10, arguments[1] || arguments[0]);
+		var num = (arguments.length == 1) ? this : arguments[0];
+		var powres = Math.pow(10, arguments[1] || arguments[0]);
 		return (Math.round(num * powres) / powres);
 	};
 
@@ -1151,12 +1165,33 @@
 		{
 			var objList = [];
 			for (var i = objCount, obj; i--, obj = gameObjects[i];) {
-				if(obj.isEntity && obj.name == entityName) {
+				if(obj.name == entityName) {
 					objList.push(obj);
 				}
 			}
 			return objList;
 		};
+		
+		/**
+		 * return the entity corresponding to the specified GUID<br>
+		 * note : avoid calling this function every frame since
+		 * it parses the whole object list each time
+		 * @name me.game#getEntityByGUID
+		 * @public
+		 * @function
+		 * @param {String} GUID entity GUID
+		 * @return {me.ObjectEntity} Object Entity (or null if not found)
+		 */
+		api.getEntityByGUID = function(guid)
+		{
+			for (var i = objCount, obj; i--, obj = gameObjects[i];) {
+				if(obj.isEntity && obj.GUID == guid) {
+					return obj;
+				}
+			}
+			return null;
+		};
+		
 		/**
 		 * add a HUD obj to the game manager
 		 * @name me.game#addHUD
@@ -1214,7 +1249,8 @@
 		api.update = function() {
 			// update the Frame counter
 			me.timer.update();
-
+			// previous rect (if any)
+			var oldRect = null;
 			// loop through our objects
 			for ( var i = objCount, obj; i--, obj = gameObjects[i];) {
 				// check for previous rect before position change
@@ -1265,7 +1301,7 @@
 				/** @private */
 				pendingDefer = (function (obj) 
 				{
-				   idx = gameObjects.indexOf(obj);
+				   var idx = gameObjects.indexOf(obj);
 				   if (idx!=-1) {
 					  gameObjects.splice(idx, 1);
 					  // update the number of object

@@ -26,7 +26,7 @@
 	ObjectSettings = {
 		/**
 		 * object entity name<br>
-		 * OPTIONAL
+		 * as defined in the Tiled Object Properties
 		 * @public
 		 * @type {String}
 		 * @name me.ObjectSettings#name
@@ -42,8 +42,19 @@
 		 * @name me.ObjectSettings#image
 		 */
 		image : null,
+		
 		/**
-		 * size of a single sprite in the spritesheet<br>
+		 * specify a transparent color for the image in rgb format (rrggb or #rrggb)<br>
+		 * OPTIONAL<br>
+		 * (using this option will imply processing time on the image)
+		 * @public
+		 * @type {String}
+		 * @name me.ObjectSettings#transparent_color
+		 */
+		transparent_color : null,
+		
+		/**
+		 * width of a single sprite in the spritesheet<br>
 		 * MANDATORY<br>
 		 * (in case of TiledObject, this field is automatically set)
 		 * @public
@@ -51,6 +62,18 @@
 		 * @name me.ObjectSettings#spritewidth
 		 */
 		spritewidth : null,
+		
+		/**
+		 * height of a single sprite in the spritesheet<br>
+		 * OPTIONAL<br>
+		 * if not specified the value will be set to the corresponding image height<br>
+		 * (in case of TiledObject, this field is automatically set)
+		 * @public
+		 * @type {Int}
+		 * @name me.ObjectSettings#spriteheight
+		 */
+		spriteheight : null,
+
 
 		/**
 		 * custom type for collision detection<br>
@@ -302,7 +325,7 @@
 				 */
 				draw : function(context) {
 					// last x pos of the viewport
-					x = this.vp.x;
+					var x = this.vp.x;
 
 					if (x > this.lastx) {
 						// going right
@@ -353,7 +376,7 @@
 	$.me.ParallaxBackgroundEntity = ParallaxBackgroundEntity
 
 	/**
-	 * A Simple object to display static or animated sprite on screen.
+	 * A Simple object to display a sprite on screen.
 	 * @class
 	 * @extends me.Rect
 	 * @memberOf me
@@ -361,21 +384,21 @@
 	 * @param {int} x the x coordinates of the sprite object
 	 * @param {int} y the y coordinates of the sprite object
 	 * @param {me.loader#getImage} image reference to the Sprite Image
-	 * @param {int} [spritewidth] size of a single sprite inside the provided image
+	 * @param {int} [spritewidth] sprite width
+	 * @param {int} [spriteheigth] sprite height
 	 * @example
 	 * // create a static Sprite Object
 	 * mySprite = new SpriteObject (100, 100, me.loader.getImage("mySpriteImage"));
-	 * // create a animated Sprite Object
-	 * mySprite = new SpriteObject (100, 100, me.loader.getImage("mySpriteImage"), 64);
-	 
 	 */
 	SpriteObject = me.Rect
 			.extend(
 			/** @scope me.SpriteObject.prototype */
 			{
-				// default pos & scale of the object
-				//pos		: null,
-				scale : null,
+				// default scale ratio of the object
+				scale	   : null,
+
+				// if true, image flipping/scaling is needed
+				scaleFlag : false,
 
 				// just to keep track of when we flip
 				lastflipX : false,
@@ -384,12 +407,8 @@
 				// z position (for ordering display)
 				z : 0,
 
-				// offset of the sprite to be displayed
-				currentSprite : 0,
-				currentSpriteOff : 0,
-
-				// if true, image scaling is needed
-				scaleFlag : false,
+				// image offset
+				offset : null,
 
 				/**
 				 * a flag that can prevent the object to be destroyed<br>
@@ -421,53 +440,45 @@
 				// a reference to the game vp 
 				vp : null,
 
-				// count the fps and manage animation change
-				fpscount : 0,
-
-				// animation cyling speed
-				animationspeed : 0,
-
 				/**
 				 * @ignore 
 				 */
-				init : function(x, y, image, spritewidth) {
+				init : function(x, y, image, spritewidth, spriteheight) {
 
 					// call the parent constructor
-					this.parent(new me.Vector2d(x, y), spritewidth
-							|| image.width, image.height);
+					this.parent(new me.Vector2d(x, y), 
+								spritewidth  || image.width, 
+								spriteheight || image.height);
 
 					// cache image reference
 					this.image = image;
-
-					// #sprite in the image  
-					this.spritecount = spritewidth ? ~~(image.width / spritewidth)
-							: 1;
 
 					// scale factor of the object
 					this.scale = new me.Vector2d(1.0, 1.0);
 
 					// create a a default collision rectangle
-					this.collisionBox = new me.Rect(this.pos, this.width,
-							this.height);
+					this.collisionBox = new me.Rect(this.pos, this.width, this.height);
 
 					// get a reference to the current viewport
 					this.vp = me.game.viewport;
 
-					// default animation speed
-					this.animationspeed = me.sys.fps / 10;
-
-					// set the current sprite index & offset
-					this.currentSprite = 0, this.currentSpriteOff = 0;
-
-					// if one single image, disable animation
-					if (this.image.width == spritewidth) {
-						this.update = function() {
-							return false;
-						}
-					}
-
+					// set the default sprite index & offset
+					this.offset = new me.Vector2d(0, 0);
+			
+				},
+				
+				/**
+				 *	specify a transparent color
+				 *	@param {String} color color key in rgb format (rrggb or #rrggb)
+				 */
+				setTransparency : function(col) {
+					// remove the # if present
+					col = (col.charAt(0) == "#") ? col.substring(1, 7) : col;
+					// applyRGB Filter (return a context object)
+					this.image = me.video.applyRGBFilter(this.image, "transparent", col.toUpperCase()).canvas;
 				},
 
+				
 				/**
 				 *	Flip object on horizontal axis
 				 *	@param {Boolean} flip enable/disable flip
@@ -481,9 +492,6 @@
 
 						// set the scaleFlag
 						this.scaleFlag = ((this.scale.x != 1.0) || (this.scale.y != 1.0))
-
-						// flip ourself
-						//this.parent(this.width);
 
 						// flip the collision box
 						this.collisionBox.flipX(this.width);
@@ -504,55 +512,35 @@
 						// set the scaleFlag
 						this.scaleFlag = ((this.scale.x != 1.0) || (this.scale.y != 1.0))
 
-						// flip ourself
-						//this.parent(this.height);
-
 						// flip the collision box
 						this.collisionBox.flipY(this.height);
 
 					}
 				},
 
-				/*---
-				
-				  scale the object
-				 
-					NOT WORKING FOR NOW...
-				 ---
-				scale : function(x, y)
-				{
-					this.scale_x = this.scale_x < 0.0 ? -x : x;
-					this.scale_y = this.scale_y < 0.0 ? -y : y;
-					// set the scaleFlag
-					this.scaleFlag = ((this.scale_x!= 1.0)  || (this.scale_y!= 1.0))
-				};
-				 */
-
 				/**
-				 * set the current sprite
-				 * @private
+				 *	Resize the object around his center<br>
+				 *  Note : This won't resize the corresponding collision box
+				 *	@param {Boolean} ratio scaling ratio
 				 */
-
-				setCurrentSprite : function(s) {
-					this.currentSprite = s;
-					this.currentSpriteOff = this.width * s;
+				resize : function(ratio)
+				{	
+					if (ratio > 0) {
+						this.scale.x = this.scale.x < 0.0 ? -ratio : ratio;
+						this.scale.y = this.scale.y < 0.0 ? -ratio : ratio;
+						// set the scaleFlag
+						this.scaleFlag = ((this.scale.x!= 1.0)  || (this.scale.y!= 1.0))
+					}
 				},
 
 				/**
-				 * sprite update (animation update)<br>
+				 * sprite update<br>
 				 * not to be called by the end user<br>
 				 * called by the game manager on each game loop
 				 * @protected
-				 * @return true if object state changed (position, animation, etc...)
+				 * @return false
 				 **/
 				update : function() {
-					if (this.visible && (this.fpscount++ > this.animationspeed)) {
-						//this.setCurrentSprite(++this.currentSprite < this.spritecount ? this.currentSprite : 0);
-						this.setCurrentSprite(++this.currentSprite
-								% this.spritecount);
-						this.fpscount = 0;
-						return true;
-					}
 					return false;
 				},
 
@@ -564,28 +552,25 @@
 				 * @param {Context2d} context 2d Context on which draw our object
 				 **/
 				draw : function(context) {
-					var xpos = this.pos.x - this.vp.pos.x, ypos = this.pos.y
-							- this.vp.pos.y;
+					
+					var xpos = this.pos.x - this.vp.pos.x, ypos = this.pos.y - this.vp.pos.y;
 
 					if (this.scaleFlag) {
+						// translate to the middle of the sprite
+						context.translate(xpos + this.hWidth, ypos + this.hHeight);
+						// scale
 						context.scale(this.scale.x, this.scale.y);
-
-						/*
-						 ...??????
-						context.translate( - this.width - ((this.width * this.scale_x)),
-													 this.height -((this.height * this.scale_y)));
-						 */
-
-						xpos = (xpos * this.scale.x)
-								- (this.scale.x < 0 ? this.width : 0);
-						ypos = (ypos * this.scale.y)
-								- (this.scale.y < 0 ? this.height : 0);
-
+						// translate back to upper left coordinates
+						context.translate(-this.hWidth, -this.hHeight);
+						// reset coordinates
+						xpos = ypos = 0;
 					}
-
-					context.drawImage(this.image, this.currentSpriteOff, 0,
-							this.width, this.height, ~~xpos, ~~ypos,
-							this.width, this.height);
+					
+					context.drawImage(this.image, 
+									this.offset.x, this.offset.y,
+									this.width, this.height, 
+									~~xpos, ~~ypos,
+									this.width, this.height);
 
 					if (this.scaleFlag) {
 						// restore the transform matrix to the normal one
@@ -593,7 +578,6 @@
 					}
 
 					if (me.debug.renderHitBox) {
-
 						// draw the sprite rectangle
 						this.parent(context, "blue");
 						// draw the collisionBox
@@ -640,14 +624,21 @@
 	 * @param {int} x the x coordinates of the sprite object
 	 * @param {int} y the y coordinates of the sprite object
 	 * @param {me.loader#getImage} Image reference of the animation sheet
-	 * @param {int} spritewidth width of the sprite image
+	 * @param {int} spritewidth width of a single sprite within the spritesheet
+	 * @param {int} [spriteheight] height of a single sprite within the spritesheet (value will be set to the image height if not specified)
 	 */
 	AnimationSheet = me.SpriteObject
 			.extend(
 			/** @scope me.AnimationSheet.prototype */
 			{
+				// count the fps and manage animation change
+				fpscount : 0,
+
+				// animation cyling speed
+				animationspeed : 0,
+
 				/** @private */
-				init : function(x, y, image, spritewidth) {
+				init : function(x, y, image, spritewidth, spriteheight) {
 					// hold all defined animation
 					this.anim = [];
 
@@ -658,25 +649,32 @@
 					this.current = null;
 
 					// call the constructor
-					this.parent(x, y, image, spritewidth);
-
+					this.parent(x, y, image, spritewidth, spriteheight);
+					
+					// #sprite per row  
+					this.spritecount = ~~(this.image.width / this.width);
+					
 					// if one single image, disable animation
-					if (this.image.width == spritewidth) {
-						this.update = function() {
-							return false;
-						}
-					} else {
-						// create a default animation sequence with all sprites
-						this.addAnimation("default", null);
-						// set as default
-						this.setCurrentAnimation("default");
-					}
+					if ((this.image.width == this.width) && (this.image.height == this.height)) {
+						// override setCurrrentSprite with an empty function
+						this.setCurrentSprite = function() {;};
+					} 
+					
+					// default animation speed
+					this.animationspeed = me.sys.fps / 10;
+
+					// create a default animation sequence with all sprites
+					this.addAnimation("default", null);
+					// set as default
+					this.setCurrentAnimation("default");
 				},
 
 				/**
-				 * add an animation
+				 * add an animation <br>
+				 * the index list must follow the logic as per the following example :<br>
+				 * <img src="spritesheet_grid.png"/>
 				 * @param {String} name animation id
-				 * @param {Int[]} frame list of sprite offset defining the animaton
+				 * @param {Int[]} index list of sprite index defining the animaton
 				 * @example
 				 * // walking animatin
 				 * this.addAnimation ("walk", [0,1,2,3,4,5]);
@@ -694,22 +692,18 @@
 					};
 
 					if (frame == null) {
-						// add them all
+						// by default create an animation with all sprites from row #0
 						for ( var i = 0; i < this.spritecount; i++) {
 							// compute and add the offset of each frame
-							//console.log(this.spriteWidth);
-							this.anim[name].frame[i] = i * this.width;//spriteWidth
-							//console.log(this.anim[name].frame[i]);
+							this.anim[name].frame[i] = new me.Vector2d(i * this.width, 0);
 						}
 
 					} else {
 						var frameidx = 0;
 						for ( var i = 0; i < frame.length; i++) {
 							// compute and add the offset of each frame
-							//console.log(frame[i]);
-							this.anim[name].frame[frameidx] = frame[i]
-									* this.width;//spriteWidth
-							//console.log(this.anim[name].frame[frameidx]);
+							this.anim[name].frame[frameidx] = new me.Vector2d(this.width * (frame[i] % this.spritecount), 
+																			  this.height * ~~(frame[i] / this.spritecount));
 							frameidx++;
 						}
 					}
@@ -735,7 +729,7 @@
 				setCurrentAnimation : function(name, resetAnim) {
 					this.current = this.anim[name];
 					this.resetAnim = resetAnim || null;
-					this.currentSpriteOff = this.current.frame[this.current.idx];
+					this.offset = this.current.frame[this.current.idx];
 				},
 
 				/**
@@ -758,7 +752,12 @@
 
 				setCurrentSprite : function(s) {
 					this.current.idx = s;
-					this.currentSpriteOff = this.current.frame[s];
+					this.offset = this.current.frame[s];
+					
+					// switch animation if we reach the end of the strip
+					// and a callback is defined
+					if ((this.current.idx == 0) && this.resetAnim)
+						this.setCurrentAnimation(this.resetAnim);
 				},
 
 				/**
@@ -768,12 +767,7 @@
 				 */
 				update : function() {
 					if (this.visible && (this.fpscount++ > this.animationspeed)) {
-						this.setCurrentSprite(++this.current.idx
-								% this.current.length);
-
-						if ((this.current.idx == 0) && this.resetAnim)
-							this.setCurrentAnimation(this.resetAnim);
-
+						this.setCurrentSprite(++this.current.idx % this.current.length);
 						this.fpscount = 0;
 						return true;
 					}
@@ -804,6 +798,14 @@
 			.extend(
 			/** @scope me.ObjectEntity.prototype */
 			{
+			   /**
+				* Entity "Game Unique Identifier"<br>
+				* @public
+				* @type String
+				* @name me.ObjectEntity#GUID
+				*/
+				GUID : null,
+			
 				// default type of the object (null)
 				type : 0,
 
@@ -812,10 +814,18 @@
 
 				/** @private */
 				init : function(x, y, settings) {
-					this.parent(x, y,
-							(typeof settings.image == "string") ? me.loader
-									.getImage(settings.image) : settings.image,
-							settings.spritewidth);
+					this.parent(x, y, 
+								(typeof settings.image == "string") ? me.loader.getImage(settings.image) : settings.image, 
+								settings.spritewidth, 
+								settings.spriteheight);
+					
+					// check for user defined transparent color
+					if (settings.transparent_color) {
+						this.setTransparency(settings.transparent_color);
+					}
+					
+					// set the object GUID value
+					this.GUID = me.utils.createGUID();
 					
 					// set the object entity name
 					this.name = settings.name;
@@ -823,38 +833,102 @@
 					// adjust initial coordinates should be bottom left ones
 					this.pos.set(x, y + me.game.currentLevel.tileheight	- this.height);
 
-					// velocity to be applied on player movement
+					/**
+					 * entity current velocity<br>
+					 * @public
+					 * @type me.Vector2d
+					 * @name me.ObjectEntity#vel
+					 */
 					this.vel = new me.Vector2d();
 
-					// default speed
+					/**
+					 * entity current acceleration<br>
+					 * @public
+					 * @type me.Vector2d
+					 * @name me.ObjectEntity#accel
+					 */
 					this.accel = new me.Vector2d();
 					
-					// default friction (0,0)
+					/**
+					 * entity current friction<br>
+					 * @public
+					 * @type me.Vector2d
+					 * @name me.ObjectEntity#friction
+					 */
 					this.friction = new me.Vector2d();
 					
-					// max velocity to be applied on entity movement
+					/**
+					 * max velocity (to limit entity velocity)<br>
+					 * @public
+					 * @type me.Vector2d
+					 * @name me.ObjectEntity#maxVel
+					 */
 					this.maxVel = new me.Vector2d(1000,1000);
 
 					// some default contants
+					/**
+					 * Default gravity value of the entity<br>
+					 * default value : 0.98 (earth gravity)<br>
+					 * to be set to 0 for RPG, shooter, etc...
+					 * @public
+					 * @type Number
+					 * @name me.ObjectEntity#gravity
+					 */
 					this.gravity = 0.98;
 
 					// just to identify our object
 					this.isEntity = true;
 
-					// to know if our object can break tiles
-					this.canBreakTile = false;
-
 					// dead state :)
+					/**
+					 * dead/living state of the entity<br>
+					 * default value : true
+					 * @public
+					 * @type Boolean
+					 * @name me.ObjectEntity#alive
+					 */
 					this.alive = true;
 
-					// some usefull jump variable
+					// some usefull variable
+					
+					/**
+					 * falling state of the object<br>
+					 * true if the object is falling<br>
+					 * false if the object is standing on something<br>
+					 * (!) READ ONLY property
+					 * @public
+					 * @type Boolean
+					 * @name me.ObjectEntity#falling
+					 */
 					this.falling = false;
+					/**
+					 * jumping state of the object<br>
+					 * equal true if the entity is jumping<br>
+					 * (!) READ ONLY property
+					 * @public
+					 * @type Boolean
+					 * @name me.ObjectEntity#jumping
+					 */
 					this.jumping = false;
 					this.jumpspeed = 0;
 
 					// some usefull slope variable
 					this.slopeY = 0;
+					/**
+					 * equal true if the entity is standing on a slope<br>
+					 * (!) READ ONLY property
+					 * @public
+					 * @type Boolean
+					 * @name me.ObjectEntity#onslope
+					 */
 					this.onslope = false;
+					/**
+					 * equal true if the entity is on a ladder<br>
+					 * (!) READ ONLY property
+					 * @public
+					 * @type Boolean
+					 * @name me.ObjectEntity#onladder
+					 */
 					this.onladder = false;
 
 					// to enable collision detection
@@ -864,14 +938,36 @@
 					this.type = settings.type || 0;
 
 					// to manage the flickering effect
+					/**
+					 * equal true if the entity is flickering<br>
+					 * (!) READ ONLY property
+					 * @public
+					 * @type Boolean
+					 * @name me.ObjectEntity#flickering
+					 */
 					this.flickering = false;
 					this.flickerTimer = -1;
 					this.flickercb = null;
 
 					// ref to the collision map
 					this.collisionMap = me.game.collisionMap;
-
-					// a callback when the entity break a tile :) 
+					
+					// to know if our object can break tiles
+					/**
+					 * Define if an entity can go through breakable tiles<br>
+					 * default value : false<br>
+					 * @public
+					 * @type Boolean
+					 * @name me.ObjectEntity#canBreakTile
+					 */
+					this.canBreakTile = false;
+					
+					/**
+					 * a callback when an entity break a tile<br>
+					 * @public
+					 * @type Function
+					 * @name me.ObjectEntity#onTileBreak
+					 */
 					this.onTileBreak = null;
 				},
 
@@ -965,7 +1061,7 @@
 				/**
 				 * helper function for platform games: <br>
 				 * make the entity move left of right<br>
-				 * @param {Boolean} left 
+				 * @param {Boolean} left will automatically flip horizontally the entity sprite
 				 * @protected
 				 * @example
 				 * if (me.input.isKeyPressed('left'))
@@ -986,7 +1082,7 @@
 				 * helper function for platform games: <br>
 				 * make the entity move up and down<br>
 				 * only valid is the player is on a ladder
-				 * @param {Boolean} up 
+				 * @param {Boolean} up will automatically flip vertically the entity sprite
 				 * @protected
 				 * @example
 				 * if (me.input.isKeyPressed('up'))
@@ -1135,11 +1231,11 @@
 				 * // make the player move
 				 * if (me.input.isKeyPressed('left'))
 				 * {
-				 *     this.doWalk(true);
+				 *     this.vel.x -= this.accel.x * me.timer.tick;
 				 * }
 				 * else if (me.input.isKeyPressed('right'))
 				 * {
-				 *     this.doWalk(false);
+				 *     this.vel.x += this.accel.x * me.timer.tick;
 				 * }
 				 * // update player position
 				 * this.updateMovement();
@@ -1149,7 +1245,7 @@
 					this.vel = this.computeVelocity(this.vel);
 					
 					// check for collision
-					collision = this.collisionMap.checkCollision(this.collisionBox, this.vel);
+					var collision = this.collisionMap.checkCollision(this.collisionBox, this.vel);
 
 					// update some flags
 					this.onladder = collision.xprop.isLadder;

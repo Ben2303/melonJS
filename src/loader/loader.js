@@ -65,15 +65,15 @@
 		  ---*/
 
 		draw : function(context) {
-			var y = context.canvas.height / 2;
-
-			me.video.clearSurface(context, "black");
-
+			
 			// measure the logo size
-			logo1_width = this.logo1.measureText(context, "melon").width;
-			logo_width = logo1_width
-					+ this.logo2.measureText(context, "JS").width
-
+			var y = context.canvas.height / 2;
+			var logo1_width = this.logo1.measureText(context, "melon").width;
+			var logo_width = logo1_width + this.logo2.measureText(context, "JS").width;
+			
+			// clear surface
+			me.video.clearSurface(context, "black");
+			
 			// draw the melonJS logo
 			this.logo1.draw(context, 'melon',
 					((context.canvas.width - logo_width) / 2),
@@ -154,8 +154,7 @@
 			} else {
 				timerId = setTimeout(checkLoadStatus, 100);
 			}
-		}
-		;
+		};
 
 		/* ---
 		
@@ -165,8 +164,7 @@
 		function onImageError(e) {
 			// retry mechanism with image loading ???
 			throw "melonJS: Failed loading image resource";
-		}
-		;
+		};
 
 		/* ---
 		
@@ -190,8 +188,7 @@
 			imgList[img.name].onload = onload || obj.onResourceLoaded.bind(obj);
 			imgList[img.name].onerror = onerror || onImageError.bind(this);
 			imgList[img.name].src = img.src + me.nocache;
-		}
-		;
+		};
 
 		/* ---
 		
@@ -227,8 +224,7 @@
 				resourceCount += 1;
 				tmxCount += 1;
 			}
-		}
-		;
+		};
 
 		/* ---
 		

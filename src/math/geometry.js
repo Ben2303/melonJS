@@ -260,6 +260,11 @@
 				// half width/height
 				hWidth : 0,
 				hHeight : 0,
+				
+				// flags to check if we
+				// already redefined properties
+				hProp : false,
+				vProp : false,
 
 				
 				/** @private */
@@ -276,11 +281,6 @@
 					this.width = w;
 					this.height = h;
 
-					// full width/height
-					/*
-					this.fWidth = w;
-					this.fHeight = h;
-					 */
 					// half width/height
 					this.hWidth = ~~(w / 2);
 					this.hHeight = ~~(h / 2);
@@ -345,8 +345,8 @@
 				 * @return {me.Rect} the union(ed) rectangle	 
 				 */
 				union : function(/** {me.Rect} */ r) {
-					x1 = Math.min(this.pos.x, r.pos.x);
-					y1 = Math.min(this.pos.y, r.pos.y);
+					var x1 = Math.min(this.pos.x, r.pos.x);
+					var y1 = Math.min(this.pos.y, r.pos.y);
 
 					this.width = Math.ceil(Math.max(this.pos.x + this.width,
 							r.pos.x + r.width)
@@ -375,40 +375,47 @@
 						this.colPos.x = x;
 						this.width = w;
 						this.hWidth = ~~(this.width / 2);
-
-						// redefine our properties taking colPos into account
-						Object.defineProperty(this, "left", {
-							get : function() {
-								return this.pos.x + this.colPos.x;
-							},
-							configurable : true
-						});
-						Object.defineProperty(this, "right", {
-							get : function() {
-								return this.pos.x + this.colPos.x + this.width;
-							},
-							configurable : true
-						});
+						
+						// avoid Property definition if not necessary
+						if (!this.hProp) {
+							// redefine our properties taking colPos into account
+							Object.defineProperty(this, "left", {
+								get : function() {
+									return this.pos.x + this.colPos.x;
+								},
+								configurable : true
+							});
+							Object.defineProperty(this, "right", {
+								get : function() {
+									return this.pos.x + this.colPos.x + this.width;
+								},
+								configurable : true
+							});
+							this.hProp = true;
+						}
 					}
 					if (y != -1) {
 						this.colPos.y = y;
 						this.height = h;
 						this.hHeight = ~~(this.height / 2);
-						// redefine our properties taking colPos into account
-						Object.defineProperty(this, "top", {
-							get : function() {
-								return this.pos.y + this.colPos.y;
-							},
-							configurable : true
-						});
-						Object.defineProperty(this, "bottom",
-								{
-									get : function() {
-										return this.pos.y + this.colPos.y
-												+ this.height;
-									},
-									configurable : true
-								});
+						
+						// avoid Property definition if not necessary
+						if (!this.vProp) {
+							// redefine our properties taking colPos into account
+							Object.defineProperty(this, "top", {
+								get : function() {
+									return this.pos.y + this.colPos.y;
+								},
+								configurable : true
+							});
+							Object.defineProperty(this, "bottom", {
+								get : function() {
+									return this.pos.y + this.colPos.y + this.height;
+								},
+								configurable : true
+							});
+							this.vProp = true;
+						}
 					}
 				},
 
@@ -481,7 +488,7 @@
 				 */
 				collideVsAABB : function(/** {me.Rect} */ rect) {
 					// response vector
-					p = new Vector2d(0, 0);
+					var p = new Vector2d(0, 0);
 
 					// check if both box are overlaping
 					if (this.checkAxisAligned(rect)) {
