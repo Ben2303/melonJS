@@ -116,6 +116,8 @@
 		var imgList = [];
 		// contains all the xml loaded
 		var xmlList = {};
+		// contains all the JSON loaded
+		var jsonList = {};
 		// flag to check loading status
 		var resourceCount = 0;
 		var loadCount = 0;
@@ -229,6 +231,30 @@
 		;
 
 		/* ---
+		
+		preload JSON files
+		---									*/
+
+	function preloadJSON(jsonData) {
+		if ($.XMLHttpRequest) {
+			// code for IE7+, Firefox, Chrome, Opera, Safari
+			xmlhttp = new XMLHttpRequest();
+			// to ensure our document is treated as a XML file
+			if (xmlhttp.overrideMimeType)
+				xmlhttp.overrideMimeType('application/json'); // not sure if it worth it
+		}
+		// load our JSON
+		xmlhttp.open("GET", jsonData.src + me.nocache, false);	// + me.nocache ?
+		xmlhttp.onload = obj.onResourceLoaded.bind(obj);
+		xmlhttp.send();
+
+		// set the xmldoc in the array
+		jsonList[jsonData.name] = {};
+		jsonList[jsonData.name].xml = xmlhttp.responseText;
+	}
+	;
+		
+		/* ---
 			
 			PUBLIC STUFF
 				
@@ -332,6 +358,11 @@
 					resourceCount += 1;
 					break;
 
+				case "json":
+					preloadJSON(res[i]);
+					resourceCount += 1;
+					break;				
+					
 				default:
 					throw "melonJS: me.loader.preload : unknow resource type : %s"
 							+ res[i].type;
@@ -394,6 +425,24 @@
 
 		};
 
+		/**
+		 * return the specified JSON object
+		 * @name me.loader#getJSON
+		 * @public
+		 * @function
+		 * @param {String} json file name ("jsonData");
+		 * @return {Object} 
+		 */
+		obj.getJSON = function(elt) {
+			if (jsonList != null)
+				return jsonList[elt].json;
+			else {
+				//console.log ("warning %s resource not yet loaded!",name);
+				return null;
+			}
+
+		};
+		
 		/**
 		 * return the specified Image Object
 		 * @name me.loader#getImage
